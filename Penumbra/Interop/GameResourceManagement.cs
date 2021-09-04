@@ -53,7 +53,7 @@ namespace Penumbra.Interop
                     "41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4C 8B E9 48 83 C1 08" );
             GeneralUtil.PrintDebugAddress( "UnloadPlayerResources", unloadPlayerResourcesAddress );
 
-            var loadDataFilesAddress = Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? 00 48 8D 8E ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" );
+            var loadDataFilesAddress = Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? 00 48 8D ?? ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" );
             GeneralUtil.PrintDebugAddress( "LoadDataFiles", loadDataFilesAddress );
 
             var unloadCharacterResourceAddress =
@@ -64,7 +64,7 @@ namespace Penumbra.Interop
             GeneralUtil.PrintDebugAddress( "ResidentResourceManager", _residentResourceManagerAddress );
 
             _characterUtilityAddress =
-                Dalamud.SigScanner.GetStaticAddressFromSig( "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? 00 48 8D 8E ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" );
+                Dalamud.SigScanner.GetStaticAddressFromSig( "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? 00 48 8D ?? ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" );
             GeneralUtil.PrintDebugAddress( "CharacterUtility", _characterUtilityAddress );
 
             LoadPlayerResources    = Marshal.GetDelegateForFunctionPointer< LoadPlayerResourcesPrototype >( loadPlayerResourcesAddress );

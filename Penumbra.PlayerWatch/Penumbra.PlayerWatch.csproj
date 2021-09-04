@@ -31,7 +31,7 @@
         <Reference Include="Dalamud">
             <HintPath>$(DALAMUD_ROOT)\Dalamud.dll</HintPath>
             <HintPath>..\libs\Dalamud.dll</HintPath>
-            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\Dalamud.dll</HintPath>
+            <HintPath>D:\OG\FF14\Dalamud5\6.0.0.0\Dalamud.dll</HintPath>
             <Private>False</Private>
         </Reference>
     </ItemGroup>
