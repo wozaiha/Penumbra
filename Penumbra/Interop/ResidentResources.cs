@@ -111,6 +111,7 @@ namespace Penumbra.Interop
                   + $"{ResourceToPath( ( byte* )pResources[ i ] )}" );
 
                 UnloadCharacterResource( oldResources[ i ] );
+
                 // Temporary fix against crashes?
                 if( handle->RefCount <= 0 )
                 {
