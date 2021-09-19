@@ -65,27 +65,27 @@
     <ItemGroup>
         <PackageReference Include="ILRepack" Version="2.0.18" GeneratePathProperty="true" />
         <Reference Include="Dalamud">
-            <HintPath>D:\OG\FF14\Dalamud5\6.0.0.0\Dalamud.dll</HintPath>
+            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\Dalamud.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="ImGui.NET">
-            <HintPath>D:\OG\FF14\Dalamud5\6.0.0.0\ImGui.NET.dll</HintPath>
+            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\ImGui.NET.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="ImGuiScene">
-            <HintPath>D:\OG\FF14\Dalamud5\6.0.0.0\ImGuiScene.dll</HintPath>
+            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\ImGuiScene.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="Lumina">
-            <HintPath>D:\OG\FF14\Dalamud5\6.0.0.0\Lumina.dll</HintPath>
+            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\Lumina.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="Lumina.Excel">
-            <HintPath>D:\OG\FF14\Dalamud5\6.0.0.0\Lumina.Excel.dll</HintPath>
+            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\Lumina.Excel.dll</HintPath>
             <Private>False</Private>
         </Reference>
         <Reference Include="FFXIVClientStructs">
-            <HintPath>..\FFXIVClientStructs.dll</HintPath>
+            <HintPath>$(AppData)\XIVLauncher\addon\Hooks\dev\FFXIVClientStructs.dll</HintPath>
             <Private>true</Private>
         </Reference>
     </ItemGroup>
@@ -95,7 +95,7 @@
             <InputAssemblies Include="$(TargetPath)" />
             <InputAssemblies Include="$(TargetDir)Penumbra.dll $(TargetDir)FFXIVClientStructs.dll" Exclude="$(TargetPath)" />
         </ItemGroup>
-        <Exec Command="$(ILRepack) /lib:$(TargetDir) /lib:D:\OG\FF14\Dalamud5\6.0.0.0 /out:$(TargetDir)$(TargetFileName) @(InputAssemblies, ' ')" />
+        <Exec Command="$(ILRepack) /lib:$(TargetDir) /lib:$(AppData)\XIVLauncher\addon\Hooks\dev /out:$(TargetDir)$(TargetFileName) @(InputAssemblies, ' ')" />
     </Target>
 
     <ItemGroup>
