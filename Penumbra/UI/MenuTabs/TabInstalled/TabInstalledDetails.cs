@@ -1,7 +1,10 @@
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Interface;
 using ImGuiNET;
+using Lumina.Data.Parsing;
+using Lumina.Excel.GeneratedSheets;
 using Penumbra.GameData.Enums;
 using Penumbra.GameData.Util;
 using Penumbra.Meta;
@@ -52,7 +55,7 @@ namespace Penumbra.UI
             private Option?      _selectedOption;
             private string       _currentGamePaths = "";
 
-            private (FileInfo name, bool selected, uint color, RelPath relName)[]? _fullFilenameList;
+            private (FullPath name, bool selected, uint color, RelPath relName)[]? _fullFilenameList;
 
             private readonly Selector          _selector;
             private readonly SettingsInterface _base;
@@ -182,22 +185,7 @@ namespace Penumbra.UI
                 raii.Push( ImGui.EndListBox );
                 foreach( var (name, data) in Mod.Data.ChangedItems )
                 {
-                    var ret = ImGui.Selectable( name ) ? MouseButton.Left : MouseButton.None;
-                    ret = ImGui.IsItemClicked( ImGuiMouseButton.Right ) ? MouseButton.Right : ret;
-                    ret = ImGui.IsItemClicked( ImGuiMouseButton.Middle ) ? MouseButton.Middle : ret;
-
-                    if( ret != MouseButton.None )
-                    {
-                        _base._penumbra.Api.InvokeClick( ret, data );
-                    }
-
-                    if( _base._penumbra.Api.HasTooltip && ImGui.IsItemHovered() )
-                    {
-                        ImGui.BeginTooltip();
-                        raii.Push( ImGui.EndTooltip );
-                        _base._penumbra.Api.InvokeTooltip( data );
-                        raii.Pop();
-                    }
+                    _base.DrawChangedItem( name, data );
                 }
             }
 
@@ -401,6 +389,7 @@ namespace Penumbra.UI
                         continue;
                     }
 
+                    _fullFilenameList![ i ].selected = false;
                     var relName = _fullFilenameList[ i ].relName;
                     if( defaultIndex >= 0 )
                     {
@@ -428,6 +417,7 @@ namespace Penumbra.UI
 
                 if( changed )
                 {
+                    _fullFilenameList = null;
                     _selector.SaveCurrentMod();
                     // Since files may have changed, we need to recompute effective files.
                     foreach( var collection in _modManager.Collections.Collections.Values

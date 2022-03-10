@@ -129,6 +129,11 @@ namespace Penumbra.Mods
                         TempWritable = false;
                     }
                 }
+
+                if( !firstTime )
+                {
+                    Collections.RecreateCaches();
+                }
             }
         }
 
@@ -298,10 +303,10 @@ namespace Penumbra.Mods
             return true;
         }
 
-        public bool UpdateMod( ModData mod, bool reloadMeta = false, bool recomputeMeta = false )
+        public bool UpdateMod( ModData mod, bool reloadMeta = false, bool recomputeMeta = false, bool force = false )
         {
             var oldName     = mod.Meta.Name;
-            var metaChanges = mod.Meta.RefreshFromFile( mod.MetaFile );
+            var metaChanges = mod.Meta.RefreshFromFile( mod.MetaFile ) || force;
             var fileChanges = mod.Resources.RefreshModFiles( mod.BasePath );
 
             if( !recomputeMeta && !reloadMeta && !metaChanges && fileChanges == 0 )
@@ -340,6 +345,14 @@ namespace Penumbra.Mods
             Collections.UpdateCollections( mod, metaChanges, fileChanges, nameChange, reloadMeta );
 
             return true;
+        }
+
+        public bool CheckCrc64( ulong crc )
+        {
+            if( Collections.ActiveCollection.Cache?.Checksums.Contains( crc ) ?? false )
+                return true;
+
+            return Collections.ForcedCollection.Cache?.Checksums.Contains( crc ) ?? false;
         }
 
         public string? ResolveSwappedOrReplacementPath( GamePath gameResourcePath )

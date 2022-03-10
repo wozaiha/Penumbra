@@ -45,7 +45,7 @@ namespace Penumbra.Interop
             var module = Dalamud.SigScanner.Module.BaseAddress.ToInt64();
             var loadPlayerResourcesAddress =
                 Dalamud.SigScanner.ScanText(
-                    "E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? BA ?? ?? ?? ?? 41 B8 ?? ?? ?? ?? 48 8B 48 30 48 8B 01 FF 50 10 48 85 C0 74 0A " );
+                    "E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? BA ?? ?? ?? ?? 41 B8 ?? ?? ?? ?? 48 8B 48 30 48 8B 01 FF 50 10 48 85 C0 74 0A" );
             GeneralUtil.PrintDebugAddress( "LoadPlayerResources", loadPlayerResourcesAddress );
 
             var unloadPlayerResourcesAddress =
@@ -75,7 +75,7 @@ namespace Penumbra.Interop
         }
 
         // Forces the reload of a specific set of 85 files, notably containing the eqp, eqdp, gmp and est tables, by filename.
-        public unsafe void ReloadPlayerResources()
+        public unsafe void ReloadResidentResources()
         {
             ReloadCharacterResources();
 
@@ -101,7 +101,7 @@ namespace Penumbra.Interop
                 var handle = ( ResourceHandle* )oldResources[ i ];
                 if( oldResources[ i ].ToPointer() == pResources[ i ] )
                 {
-                    PluginLog.Debug( $"Unchanged resource: {ResourceToPath( ( byte* )oldResources[ i ].ToPointer() )}" );
+                    PluginLog.Verbose( $"Unchanged resource: {ResourceToPath( ( byte* )oldResources[ i ].ToPointer() )}" );
                     ( ( ResourceHandle* )oldResources[ i ] )->DecRef();
                     continue;
                 }

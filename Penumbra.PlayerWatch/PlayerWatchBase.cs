@@ -9,246 +9,311 @@ using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Logging;
 using Penumbra.GameData.Structs;
 
-namespace Penumbra.PlayerWatch
+namespace Penumbra.PlayerWatch;
+
+internal readonly struct WatchedPlayer
 {
-    internal class PlayerWatchBase : IDisposable
+    public readonly Dictionary< ulong, CharacterEquipment > FoundActors;
+    public readonly HashSet< PlayerWatcher >                RegisteredWatchers;
+
+    public WatchedPlayer( PlayerWatcher watcher )
     {
-        public const  int GPosePlayerIdx  = 201;
-        public const  int GPoseTableEnd   = GPosePlayerIdx + 48;
-        private const int ObjectsPerFrame = 8;
+        FoundActors        = new Dictionary< ulong, CharacterEquipment >( 4 );
+        RegisteredWatchers = new HashSet< PlayerWatcher > { watcher };
+    }
+}
 
-        private readonly  Framework                                                            _framework;
-        private readonly  ClientState                                                          _clientState;
-        private readonly  ObjectTable                                                          _objects;
-        internal readonly HashSet< PlayerWatcher >                                             RegisteredWatchers = new();
-        internal readonly Dictionary< string, (CharacterEquipment, HashSet< PlayerWatcher >) > Equip              = new();
-        private           int                                                                  _frameTicker;
-        private           bool                                                                 _inGPose;
-        private           bool                                                                 _enabled;
-        private           bool                                                                 _cancel;
+internal class PlayerWatchBase : IDisposable
+{
+    public const  int GPosePlayerIdx  = 201;
+    public const  int GPoseTableEnd   = GPosePlayerIdx + 48;
+    private const int ObjectsPerFrame = 32;
 
-        internal PlayerWatchBase( Framework framework, ClientState clientState, ObjectTable objects )
+    private readonly  Framework                           _framework;
+    private readonly  ClientState                         _clientState;
+    private readonly  ObjectTable                         _objects;
+    internal readonly HashSet< PlayerWatcher >            RegisteredWatchers = new();
+    internal readonly Dictionary< string, WatchedPlayer > Equip              = new();
+    internal          HashSet< ulong >                    SeenActors;
+    private           int                                 _frameTicker;
+    private           bool                                _inGPose;
+    private           bool                                _enabled;
+    private           bool                                _cancel;
+
+    internal PlayerWatchBase( Framework framework, ClientState clientState, ObjectTable objects )
+    {
+        _framework   = framework;
+        _clientState = clientState;
+        _objects     = objects;
+        SeenActors   = new HashSet< ulong >( _objects.Length );
+    }
+
+    internal void RegisterWatcher( PlayerWatcher watcher )
+    {
+        RegisteredWatchers.Add( watcher );
+        if( watcher.Active )
         {
-            _framework   = framework;
-            _clientState = clientState;
-            _objects     = objects;
+            EnablePlayerWatch();
         }
+    }
 
-        internal void RegisterWatcher( PlayerWatcher watcher )
+    internal void UnregisterWatcher( PlayerWatcher watcher )
+    {
+        if( RegisteredWatchers.Remove( watcher ) )
         {
-            RegisteredWatchers.Add( watcher );
-            if( watcher.Active )
+            foreach( var (key, value) in Equip.ToArray() )
             {
-                EnablePlayerWatch();
-            }
-        }
-
-        internal void UnregisterWatcher( PlayerWatcher watcher )
-        {
-            if( RegisteredWatchers.Remove( watcher ) )
-            {
-                foreach( var items in Equip.Values )
+                if( value.RegisteredWatchers.Remove( watcher ) && value.RegisteredWatchers.Count == 0 )
                 {
-                    items.Item2.Remove( watcher );
-                }
-            }
-
-            CheckActiveStatus();
-        }
-
-        internal void CheckActiveStatus()
-        {
-            if( RegisteredWatchers.Any( w => w.Active ) )
-            {
-                EnablePlayerWatch();
-            }
-            else
-            {
-                DisablePlayerWatch();
-            }
-        }
-
-        internal CharacterEquipment UpdatePlayerWithoutEvent( Character actor )
-        {
-            var equipment = new CharacterEquipment( actor );
-            if( Equip.ContainsKey( actor.Name.ToString() ) )
-            {
-                Equip[ actor.Name.ToString() ] = ( equipment, Equip[ actor.Name.ToString() ].Item2 );
-            }
-
-            return equipment;
-        }
-
-        internal void AddPlayerToWatch( string playerName, PlayerWatcher watcher )
-        {
-            if( Equip.TryGetValue( playerName, out var items ) )
-            {
-                items.Item2.Add( watcher );
-            }
-            else
-            {
-                Equip[ playerName ] = ( new CharacterEquipment(), new HashSet< PlayerWatcher > { watcher } );
-            }
-        }
-
-        public void RemovePlayerFromWatch( string playerName, PlayerWatcher watcher )
-        {
-            if( Equip.TryGetValue( playerName, out var items ) )
-            {
-                items.Item2.Remove( watcher );
-                if( items.Item2.Count == 0 )
-                {
-                    Equip.Remove( playerName );
+                    Equip.Remove( key );
                 }
             }
         }
 
-        internal void EnablePlayerWatch()
+        CheckActiveStatus();
+    }
+
+    internal void CheckActiveStatus()
+    {
+        if( RegisteredWatchers.Any( w => w.Active ) )
         {
-            if( !_enabled )
+            EnablePlayerWatch();
+        }
+        else
+        {
+            DisablePlayerWatch();
+        }
+    }
+
+    private static ulong GetId( GameObject actor )
+        => actor.ObjectId | ( ( ulong )actor.OwnerId << 32 );
+
+    internal CharacterEquipment UpdatePlayerWithoutEvent( Character actor )
+    {
+        var name      = actor.Name.ToString();
+        var equipment = new CharacterEquipment( actor );
+        if( Equip.TryGetValue( name, out var watched ) )
+        {
+            watched.FoundActors[ GetId( actor ) ] = equipment;
+        }
+
+        return equipment;
+    }
+
+    internal void AddPlayerToWatch( string playerName, PlayerWatcher watcher )
+    {
+        if( Equip.TryGetValue( playerName, out var items ) )
+        {
+            items.RegisteredWatchers.Add( watcher );
+        }
+        else
+        {
+            Equip[ playerName ] = new WatchedPlayer( watcher );
+        }
+    }
+
+    public void RemovePlayerFromWatch( string playerName, PlayerWatcher watcher )
+    {
+        if( Equip.TryGetValue( playerName, out var items ) )
+        {
+            if( items.RegisteredWatchers.Remove( watcher ) && items.RegisteredWatchers.Count == 0 )
             {
-                _enabled                      =  true;
-                _framework.Update             += OnFrameworkUpdate;
-                _clientState.TerritoryChanged += OnTerritoryChange;
-                _clientState.Logout           += OnLogout;
+                Equip.Remove( playerName );
+            }
+        }
+    }
+
+    internal void EnablePlayerWatch()
+    {
+        if( !_enabled )
+        {
+            _enabled                      =  true;
+            _framework.Update             += OnFrameworkUpdate;
+            _clientState.TerritoryChanged += OnTerritoryChange;
+            _clientState.Logout           += OnLogout;
+        }
+    }
+
+    internal void DisablePlayerWatch()
+    {
+        if( _enabled )
+        {
+            _enabled                      =  false;
+            _framework.Update             -= OnFrameworkUpdate;
+            _clientState.TerritoryChanged -= OnTerritoryChange;
+            _clientState.Logout           -= OnLogout;
+        }
+    }
+
+    public void Dispose()
+        => DisablePlayerWatch();
+
+    private void OnTerritoryChange( object? _1, ushort _2 )
+        => Clear();
+
+    private void OnLogout( object? _1, object? _2 )
+        => Clear();
+
+    internal void Clear()
+    {
+        PluginLog.Debug( "Clearing PlayerWatcher Store." );
+        _cancel = true;
+        foreach( var kvp in Equip )
+        {
+            kvp.Value.FoundActors.Clear();
+        }
+
+        _frameTicker = 0;
+    }
+
+    private static void TriggerEvents( IEnumerable< PlayerWatcher > watchers, Character player )
+    {
+        PluginLog.Debug( "Triggering events for {PlayerName} at {Address}.", player.Name, player.Address );
+        foreach( var watcher in watchers.Where( w => w.Active ) )
+        {
+            watcher.Trigger( player );
+        }
+    }
+
+    internal void TriggerGPose()
+    {
+        for( var i = GPosePlayerIdx; i < GPoseTableEnd; ++i )
+        {
+            var player = _objects[ i ];
+            if( player == null )
+            {
+                return;
+            }
+
+            if( Equip.TryGetValue( player.Name.ToString(), out var watcher ) )
+            {
+                TriggerEvents( watcher.RegisteredWatchers, ( Character )player );
+            }
+        }
+    }
+
+    private Character? CheckGPoseObject( GameObject player )
+    {
+        if( !_inGPose )
+        {
+            return CharacterFactory.Convert( player );
+        }
+
+        for( var i = GPosePlayerIdx; i < GPoseTableEnd; ++i )
+        {
+            var a = _objects[ i ];
+            if( a == null )
+            {
+                return CharacterFactory.Convert( player );
+            }
+
+            if( a.Name == player.Name )
+            {
+                return CharacterFactory.Convert( a );
             }
         }
 
-        internal void DisablePlayerWatch()
+        return CharacterFactory.Convert( player )!;
+    }
+
+    private bool TryGetPlayer( GameObject gameObject, out WatchedPlayer watch )
+    {
+        watch = default;
+        var name = gameObject.Name.ToString();
+        return name.Length != 0 && Equip.TryGetValue( name, out watch );
+    }
+
+    private static bool InvalidObjectKind( ObjectKind kind )
+    {
+        return kind switch
         {
-            if( _enabled )
-            {
-                _enabled                      =  false;
-                _framework.Update             -= OnFrameworkUpdate;
-                _clientState.TerritoryChanged -= OnTerritoryChange;
-                _clientState.Logout           -= OnLogout;
-            }
+            ObjectKind.BattleNpc => false,
+            ObjectKind.EventNpc  => false,
+            ObjectKind.Player    => false,
+            ObjectKind.Retainer  => false,
+            _                    => true,
+        };
+    }
+
+    private GameObject? GetNextObject()
+    {
+        if( _frameTicker == GPosePlayerIdx - 1 )
+        {
+            _frameTicker = GPoseTableEnd;
         }
-
-        public void Dispose()
-            => DisablePlayerWatch();
-
-        private void OnTerritoryChange( object? _1, ushort _2 )
-            => Clear();
-
-        private void OnLogout( object? _1, object? _2 )
-            => Clear();
-
-        internal void Clear()
+        else if( _frameTicker == _objects.Length - 1 )
         {
-            PluginLog.Debug( "Clearing PlayerWatcher Store." );
-            _cancel = true;
-            foreach( var kvp in Equip )
-            {
-                kvp.Value.Item1.Clear();
-            }
-
             _frameTicker = 0;
+            foreach( var (_, equip) in Equip.Values.SelectMany( d => d.FoundActors.Where( p => !SeenActors.Contains( p.Key ) ) ) )
+            {
+                equip.Clear();
+            }
+
+            SeenActors.Clear();
+        }
+        else
+        {
+            ++_frameTicker;
         }
 
-        private static void TriggerEvents( IEnumerable< PlayerWatcher > watchers, Character player )
+        return _objects[ _frameTicker ];
+    }
+
+    private void OnFrameworkUpdate( object framework )
+    {
+        var newInGPose = _objects[ GPosePlayerIdx ] != null;
+
+        if( newInGPose != _inGPose )
         {
-            PluginLog.Debug( "Triggering events for {PlayerName} at {Address}.", player.Name, player.Address );
-            foreach( var watcher in watchers.Where( w => w.Active ) )
+            if( newInGPose )
             {
-                watcher.Trigger( player );
+                TriggerGPose();
             }
+            else
+            {
+                Clear();
+            }
+
+            _inGPose = newInGPose;
         }
 
-        internal void TriggerGPose()
+        for( var i = 0; i < ObjectsPerFrame; ++i )
         {
-            for( var i = GPosePlayerIdx; i < GPoseTableEnd; ++i )
+            var actor = GetNextObject();
+            if( actor == null
+            || InvalidObjectKind( actor.ObjectKind )
+            || !TryGetPlayer( actor, out var watch ) )
             {
-                var player = _objects[ i ];
-                if( player == null )
-                {
-                    return;
-                }
-
-                if( Equip.TryGetValue( player.Name.ToString(), out var watcher ) )
-                {
-                    TriggerEvents( watcher.Item2, ( Character )player );
-                }
-            }
-        }
-
-        private Character CheckGPoseObject( GameObject player )
-        {
-            if( !_inGPose )
-            {
-                return ( Character )player;
+                continue;
             }
 
-            for( var i = GPosePlayerIdx; i < GPoseTableEnd; ++i )
+            var character = CheckGPoseObject( actor );
+            if( _cancel )
             {
-                var a = _objects[ i ];
-                if( a == null )
-                {
-                    return ( Character )player;
-                }
-
-                if( a.Name == player.Name )
-                {
-                    return ( Character )a;
-                }
+                _cancel = false;
+                return;
             }
 
-            return ( Character )player;
-        }
-
-        private bool TryGetPlayer( GameObject gameObject, out (CharacterEquipment, HashSet< PlayerWatcher >) equip )
-        {
-            equip = default;
-            var name = gameObject.Name.ToString();
-            return name.Length != 0 && Equip.TryGetValue( name, out equip );
-        }
-
-        private void OnFrameworkUpdate( object framework )
-        {
-            var newInGPose = _objects[ GPosePlayerIdx ] != null;
-
-            if( newInGPose != _inGPose )
+            if( character == null || character.ModelType() != 0 )
             {
-                if( newInGPose )
-                {
-                    TriggerGPose();
-                }
-                else
-                {
-                    Clear();
-                }
-
-                _inGPose = newInGPose;
+                continue;
             }
 
-            for( var i = 0; i < ObjectsPerFrame; ++i )
+            var id = GetId( character );
+            SeenActors.Add( id );
+            PluginLog.Verbose( "Comparing Gear for {PlayerName} ({Id}) at {Address}...", character.Name, id, character.Address );
+            if( !watch.FoundActors.TryGetValue( id, out var equip ) )
             {
-                _frameTicker = _frameTicker < GPosePlayerIdx - 2
-                    ? _frameTicker + 2
-                    : 0;
-
-                var actor = _objects[ _frameTicker ];
-                if( actor            == null
-                 || actor.ObjectKind != ObjectKind.Player
-                 || !TryGetPlayer( actor, out var equip ) )
-                {
-                    continue;
-                }
-
-                var character = CheckGPoseObject( actor );
-
-                if( _cancel )
-                {
-                    _cancel = false;
-                    return;
-                }
-
-                PluginLog.Verbose( "Comparing Gear for {PlayerName} at {Address}...", character.Name, character.Address );
-                if( !equip.Item1.CompareAndUpdate( character ) )
-                {
-                    TriggerEvents( equip.Item2, character );
-                }
+                equip                   = new CharacterEquipment( character );
+                watch.FoundActors[ id ] = equip;
+                TriggerEvents( watch.RegisteredWatchers, character );
             }
+            else if( !equip.CompareAndUpdate( character ) )
+            {
+                TriggerEvents( watch.RegisteredWatchers, character );
+            }
+
+            break; // Only one comparison per frame.
         }
     }
 }
